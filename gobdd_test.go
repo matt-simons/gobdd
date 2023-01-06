@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"testing"
 
-	msgs "github.com/cucumber/messages-go/v12"
+	msgs "github.com/cucumber/messages/go/v21"
 	"github.com/go-bdd/assert"
 	"github.com/stretchr/testify/require"
 )
