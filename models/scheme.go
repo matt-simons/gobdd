@@ -30,6 +30,12 @@ type Scheme struct {
 	stepDefinitions []StepDefinition
 }
 
+//type Scheme interface {
+//	Register(StepDefinition) error
+//	StepDefFor(*Step) error
+//}
+
+// TODO loop through all args and ensure they are valid types
 func (s *Scheme) Register(sd StepDefinition) error {
 	inputs := sd.Expression.NumSubexp()
 
@@ -51,6 +57,32 @@ func (s *Scheme) Register(sd StepDefinition) error {
 
 	if numIn-1 < inputs {
 		return ErrTooFewArguments
+	}
+
+	for i := 1; i < typ.NumIn(); i++ {
+		param := typ.In(i)
+		switch param.Kind() {
+		case reflect.Int, reflect.Int64, reflect.Int32, reflect.Int16, reflect.Int8, reflect.String, reflect.Float64, reflect.Float32:
+			continue
+		case reflect.Ptr:
+			switch param.Elem().String() {
+			case "messages.DocString":
+				continue
+			case "messages.DataTable":
+				continue
+			default:
+				return fmt.Errorf("%w: the argument %d type %s is not supported", ErrUnsupportedArgumentType, i, param.Elem().String())
+			}
+		case reflect.Slice:
+			switch param {
+			case reflect.TypeOf([]byte(nil)):
+				continue
+			default:
+				return fmt.Errorf("%w: argument %d type %s is not supported", ErrUnsupportedArgumentType, i, param.Kind())
+			}
+		default:
+			return fmt.Errorf("%w: argument %d type %s is not supported", ErrUnsupportedArgumentType, i, param.Kind())
+		}
 	}
 
 	// if it has exactly one extra arg assert that it is a DocString or DataTable

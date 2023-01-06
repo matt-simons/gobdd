@@ -1,172 +1,73 @@
 package models
 
 import (
+	"context"
+	"errors"
+
 	messages "github.com/cucumber/messages/go/v21"
 )
 
-// Feature is an internal object to group together
-// the parsed gherkin document, the pickles and the
-// raw content.
 type Feature struct {
-	*messages.GherkinDocument
+	Location    *messages.Location       `json:"location"`
+	Tags        []*messages.Tag          `json:"tags"`
+	Language    string                   `json:"language"`
+	Keyword     string                   `json:"keyword"`
+	Name        string                   `json:"name"`
+	Description string                   `json:"description"`
+	Children    []*messages.FeatureChild `json:"children"`
 
-	//Rules []Rule
-
-	Scenarios []Scenario // or Scenario Outline
+	//Rules []*Rule
+	Scenarios []*Scenario // or Scenario Outline
 }
 
-type Scenario struct {
-	Location    *messages.Location `json:"location"`
-	Tags        []*messages.Tag    `json:"tags"`
-	Keyword     string             `json:"keyword"`
-	Name        string             `json:"name"`
-	Description string             `json:"description"`
-	Background  Background         `json:"background"`
-	Steps       []*Step            `json:"steps"`
-	//Examples    []*Examples        `json:"examples"`
-}
+func NewFeature(featureDoc *messages.Feature, scheme *Scheme) (*Feature, error) {
+	f := &Feature{}
+	var rules []*messages.Rule
+	var backgrounds []*messages.Background
+	var scenarios []*messages.Scenario
 
-type Background struct {
-	Location    *messages.Location `json:"location"`
-	Keyword     string             `json:"keyword"`
-	Name        string             `json:"name"`
-	Description string             `json:"description"`
-	Steps       []*Step            `json:"steps"`
-}
-
-// FindRule returns the rule to which the given scenario belongs
-func (f Feature) FindRule(astScenarioID string) *messages.Rule {
-	for _, child := range f.GherkinDocument.Feature.Children {
-		if ru := child.Rule; ru != nil {
-			if rc := child.Rule; rc != nil {
-				for _, rcc := range rc.Children {
-					if sc := rcc.Scenario; sc != nil && sc.Id == astScenarioID {
-						return ru
-					}
-				}
-			}
+	for _, fc := range featureDoc.Children {
+		if fc.Rule != nil {
+			rules = append(rules, fc.Rule)
 		}
-	}
-	return nil
-}
-
-// FindScenario returns the scenario in the feature or in a rule in the feature
-func (f Feature) FindScenario(astScenarioID string) *messages.Scenario {
-	for _, child := range f.GherkinDocument.Feature.Children {
-		if sc := child.Scenario; sc != nil && sc.Id == astScenarioID {
-			return sc
+		if fc.Background != nil {
+			backgrounds = append(backgrounds, fc.Background)
 		}
-		if rc := child.Rule; rc != nil {
-			for _, rcc := range rc.Children {
-				if sc := rcc.Scenario; sc != nil && sc.Id == astScenarioID {
-					return sc
-				}
-			}
+		if fc.Scenario != nil {
+			scenarios = append(scenarios, fc.Scenario)
 		}
 	}
 
-	return nil
-}
+	//for _, RuleDoc := range rules {
+	//	s, err := NewRule(ruleDoc, scheme)
+	//	if err != nil {
+	//		return f, err
+	//	}
+	//	f.Rules = append(f.Rules, s)
+	//}
 
-// FindBackground ...
-func (f Feature) FindBackground(astScenarioID string) *messages.Background {
-	var bg *messages.Background
-
-	for _, child := range f.GherkinDocument.Feature.Children {
-		if tmp := child.Background; tmp != nil {
-			bg = tmp
-		}
-
-		if sc := child.Scenario; sc != nil && sc.Id == astScenarioID {
-			return bg
-		}
-
-		if ru := child.Rule; ru != nil {
-			for _, rc := range ru.Children {
-				if tmp := rc.Background; tmp != nil {
-					bg = tmp
-				}
-
-				if sc := rc.Scenario; sc != nil && sc.Id == astScenarioID {
-					return bg
-				}
-			}
-		}
+	if len(backgrounds) > 1 {
+		return f, errors.New("a feature can only have one background")
 	}
 
-	return nil
-}
-
-// FindExample ...
-func (f Feature) FindExample(exampleAstID string) (*messages.Examples, *messages.TableRow) {
-	for _, child := range f.GherkinDocument.Feature.Children {
-		if sc := child.Scenario; sc != nil {
-			for _, example := range sc.Examples {
-				for _, row := range example.TableBody {
-					if row.Id == exampleAstID {
-						return example, row
-					}
-				}
-			}
-		}
-		if ru := child.Rule; ru != nil {
-			for _, rc := range ru.Children {
-				if sc := rc.Scenario; sc != nil {
-					for _, example := range sc.Examples {
-						for _, row := range example.TableBody {
-							if row.Id == exampleAstID {
-								return example, row
-							}
-						}
-					}
-				}
-			}
-		}
+	var backgroundDoc *messages.Background
+	if len(backgrounds) == 1 {
+		backgroundDoc = backgrounds[0]
 	}
 
-	return nil, nil
+	for _, scenarioDoc := range scenarios {
+		s, err := NewScenario(backgroundDoc, scenarioDoc, scheme)
+		if err != nil {
+			return f, err
+		}
+		f.Scenarios = append(f.Scenarios, s)
+	}
+	return f, nil
 }
 
-// FindStep ...
-func (f Feature) FindStep(astStepID string) *messages.Step {
-	for _, child := range f.GherkinDocument.Feature.Children {
-
-		if ru := child.Rule; ru != nil {
-			for _, ch := range ru.Children {
-				if sc := ch.Scenario; sc != nil {
-					for _, step := range sc.Steps {
-						if step.Id == astStepID {
-							return step
-						}
-					}
-				}
-
-				if bg := ch.Background; bg != nil {
-					for _, step := range bg.Steps {
-						if step.Id == astStepID {
-							return step
-						}
-					}
-				}
-			}
-		}
-
-		if sc := child.Scenario; sc != nil {
-			for _, step := range sc.Steps {
-				if step.Id == astStepID {
-					return step
-				}
-			}
-		}
-
-		if bg := child.Background; bg != nil {
-			for _, step := range bg.Steps {
-				if step.Id == astStepID {
-					return step
-				}
-			}
-		}
+// Add future parallel options
+func (f *Feature) Run(ctx context.Context) {
+	for _, scenario := range f.Scenarios {
+		scenario.Run(ctx)
 	}
-
-	return nil
 }

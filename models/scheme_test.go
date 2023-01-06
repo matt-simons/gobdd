@@ -196,10 +196,18 @@ var _ = Describe("Hydrating a Step", func() {
 			Entry("When DataTable", &messages.DataTable{}, func(ctx context.Context, s string, doc *messages.DataTable) error { return nil }),
 		)
 
+		It("should not apply for an invalid type", func() {
+			var stepDef = StepDefinition{
+				Expression: regexp.MustCompile("a (.*)"),
+				Function:   func(ctx context.Context, m map[string]string) error { return nil },
+			}
+			scheme := Scheme{}
+			Expect(scheme.Register(stepDef)).Should(MatchError(ErrUnsupportedArgumentType))
+		})
 	})
 })
 
-func TestScheme(t *testing.T) {
+func TestModels(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Books Suite")
+	RunSpecs(t, "Models Suite")
 }

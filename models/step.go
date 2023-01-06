@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"time"
 
@@ -9,7 +10,7 @@ import (
 )
 
 type Step struct {
-	// Should these if templated by hydrated? yes
+	// Should these if templated by hydrated? yes, (maybe not if inject from previous step?)
 	Location    *messages.Location       `json:"location"`
 	Keyword     string                   `json:"keyword"`
 	KeywordType messages.StepKeywordType `json:"keywordType,omitempty"`
@@ -46,6 +47,13 @@ func (s *Step) Run(ctx context.Context) {
 	// it contains the registry/pod sessions/helper etc
 	args := append([]reflect.Value{reflect.ValueOf(ctx)}, s.Args...)
 
+	defer func() {
+		if r := recover(); r != nil {
+			s.Execution.Result = Failed
+			s.Execution.Err = fmt.Errorf("%s", r)
+		}
+	}()
+
 	s.Execution.StartTime = time.Now()
 	ret := s.Func.Call(args)
 	s.Execution.EndTime = time.Now()
@@ -68,7 +76,7 @@ func (s *Step) Run(ctx context.Context) {
 	panic("steps should only return a single error or nil")
 }
 
-func NewStep(stepDoc *messages.Step, scheme Scheme) (*Step, error) {
+func NewStep(stepDoc *messages.Step, scheme *Scheme) (*Step, error) {
 	s := &Step{
 		Location:    stepDoc.Location,
 		Keyword:     stepDoc.Keyword,
@@ -84,4 +92,16 @@ func NewStep(stepDoc *messages.Step, scheme Scheme) (*Step, error) {
 	}
 
 	return s, nil
+}
+
+func GenerateSteps(stepDocs []*messages.Step, scheme *Scheme) ([]*Step, error) {
+	var steps []*Step
+	for _, stepDoc := range stepDocs {
+		step, err := NewStep(stepDoc, scheme)
+		if err != nil {
+			return nil, err
+		}
+		steps = append(steps, step)
+	}
+	return steps, nil
 }
